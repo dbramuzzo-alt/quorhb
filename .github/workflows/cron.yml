@@ -1,22 +1,54 @@
+name: Monitor Musica Globale
+on:
+  schedule:
+    - cron: '*/30 * * * *' 
+  workflow_dispatch: 
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Dependencies
+        run: pip install requests pandas lxml beautifulsoup4
+
       - name: Run Monitors
         id: run_scripts
         run: |
-          echo "Avvio monitor iTunes..."
-          OUT_ITUNES=$(python monitor.py)
-          echo "Risultato iTunes: $OUT_ITUNES"
+          # Eseguiamo ogni script separatamente e salviamo l'esito in file temporanei
+          python monitor.py > itunes_res.txt || echo "ERROR" > itunes_res.txt
+          python spotify_monitor.py > spotify_res.txt || echo "ERROR" > spotify_res.txt
+          python tiktok_monitor.py > tiktok_res.txt || echo "ERROR" > tiktok_res.txt
           
-          echo "Avvio monitor Spotify..."
-          OUT_SPOTIFY=$(python spotify_monitor.py)
-          echo "Risultato Spotify: $OUT_SPOTIFY"
-
-          echo "Avvio monitor TikTok..."
-          OUT_TIKTOK=$(python tiktok_monitor.py)
-          echo "Risultato TikTok: $OUT_TIKTOK"
+          # Leggiamo i risultati
+          RES_I=$(cat itunes_res.txt)
+          RES_S=$(cat spotify_res.txt)
+          RES_T=$(cat tiktok_res.txt)
           
-          if [[ "$OUT_ITUNES" == *"FOUND"* || "$OUT_SPOTIFY" == *"FOUND"* || "$OUT_TIKTOK" == *"FOUND"* ]]; then
+          echo "iTunes: $RES_I"
+          echo "Spotify: $RES_S"
+          echo "TikTok: $RES_T"
+          
+          # Se almeno uno contiene FOUND, attiviamo il salvataggio
+          if [[ "$RES_I" == *"FOUND"* || "$RES_S" == *"FOUND"* || "$RES_T" == *"FOUND"* ]]; then
             echo "found=true" >> $GITHUB_OUTPUT
-            echo "STATO: Novità rilevate!"
           else
             echo "found=false" >> $GITHUB_OUTPUT
-            echo "STATO: Nessun cambiamento."
           fi
+
+      - name: Save Changes
+        if: steps.run_scripts.outputs.found == 'true'
+        run: |
+          git config --global user.name 'Bot-Musica'
+          git config --global user.email 'actions@github.com'
+          git add novita_classifiche.txt
+          git commit -m "Aggiornamento automatico classifiche"
+          git push
+          
