@@ -3,26 +3,25 @@ import pandas as pd
 import os
 from datetime import datetime
 
-# Configurazione
-URL = "https://kworb.net/itunes/" 
+# URL specifico per le canzoni (Worldwide iTunes Song Chart)
+URL = "https://kworb.net/ww/" 
 LOG_FILE = "novita_classifiche.txt"
 
 def recupera_top_100():
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
+        # Usiamo 'content' invece di 'text' per gestire correttamente gli accenti (Rosalía, ecc.)
         response = requests.get(URL, headers=headers)
-        tabelle = pd.read_html(response.text)
-        df = max(tabelle, key=len) 
+        tabelle = pd.read_html(response.content, encoding='utf-8')
         
-        # CERCHIAMO LA COLONNA CORRETTA
-        # Kworb a volte cambia posizione, quindi cerchiamo la colonna che contiene testo lungo
-        # Invece di usare un numero fisso, cerchiamo la colonna "Artist and Title"
-        colonna_nomi = [c for c in df.columns if 'Artist' in str(c)]
+        # In questa pagina la classifica è la tabella principale
+        df = tabelle[0]
         
-        if colonna_nomi:
-            brani = df.head(100)[colonna_nomi[0]].tolist()
+        # La colonna con "Artista - Canzone" è quella chiamata 'Artist and Title'
+        # Se non la trova per nome, usiamo la posizione (di solito la seconda colonna)
+        if 'Artist and Title' in df.columns:
+            brani = df.head(100)['Artist and Title'].tolist()
         else:
-            # Se non trova la colonna col nome, proviamo la seconda colonna (indice 1)
             brani = df.head(100).iloc[:, 1].tolist()
             
         return set(brani)
@@ -39,8 +38,8 @@ else:
 attuali = recupera_top_100()
 
 if attuali:
-    # Filtriamo via eventuali simboli strani rimasti
-    nuove_entrate = [b for b in attuali if len(str(b)) > 5 and b not in storico]
+    # Cerchiamo le canzoni che non sono presenti nel file log
+    nuove_entrate = [b for b in attuali if str(b) != 'nan' and b not in storico]
     
     if nuove_entrate:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
