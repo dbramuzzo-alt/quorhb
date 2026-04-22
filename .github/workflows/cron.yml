@@ -1,4 +1,4 @@
-name: Monitor Kworb Automatico
+name: Monitor Musica Globale
 on:
   schedule:
     - cron: '*/30 * * * *' 
@@ -8,29 +8,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Copia il contenuto del repository
-        uses: actions/checkout@v4 # Aggiornato da v3 a v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Installa Python
-        uses: actions/setup-python@v5 # Aggiornato da v4 a v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Versione più recente e stabile
+          python-version: '3.11'
 
-      - name: Installa le librerie necessarie
+      - name: Dependencies
         run: pip install requests pandas lxml beautifulsoup4
 
-      - name: Esegui lo script di controllo
-        id: run_script
+      - name: Run Monitors
+        id: run_scripts
         run: |
-          OUTPUT=$(python monitor.py)
-          echo "result=$OUTPUT" >> $GITHUB_OUTPUT
+          # Esegue iTunes e salva il risultato
+          OUT1=$(python monitor.py)
+          # Esegue Spotify e salva il risultato
+          OUT2=$(python spotify_monitor.py)
+          
+          # Se almeno uno dei due ha trovato novità (FOUND)
+          if [[ "$OUT1" == *"FOUND"* || "$OUT2" == *"FOUND"* ]]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Salva i cambiamenti (se ci sono novità)
-        if: contains(steps.run_script.outputs.result, 'FOUND')
+      - name: Save Changes
+        if: steps.run_scripts.outputs.found == 'true'
         run: |
-          git config --global user.name 'Bot-Monitor'
+          git config --global user.name 'Bot-Musica'
           git config --global user.email 'actions@github.com'
           git add novita_classifiche.txt
-          git commit -m "Aggiornamento: Nuove canzoni trovate"
+          git commit -m "Novità rilevata nelle classifiche"
           git push
           
