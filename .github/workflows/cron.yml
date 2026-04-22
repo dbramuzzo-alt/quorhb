@@ -4,20 +4,17 @@ on:
     - cron: '*/30 * * * *' 
   workflow_dispatch: 
 
-
-# Questa sezione forza l'uso di Node 24 e toglie l'avviso
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Aggiornato alla v5 (compatibile con Node 24)
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
+      # Aggiornato alla v6 (compatibile con Node 24)
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -27,23 +24,19 @@ jobs:
       - name: Run Monitors
         id: run_scripts
         run: |
-          # 1. Eseguiamo iTunes
-          echo "Avvio monitor iTunes..."
-          OUT_ITUNES=$(python monitor.py)
-          echo "Risultato iTunes: $OUT_ITUNES"
+          python monitor.py > itunes_res.txt || echo "ERROR" > itunes_res.txt
+          python spotify_monitor.py > spotify_res.txt || echo "ERROR" > spotify_res.txt
           
-          # 2. Eseguiamo Spotify
-          echo "Avvio monitor Spotify..."
-          OUT_SPOTIFY=$(python spotify_monitor.py)
-          echo "Risultato Spotify: $OUT_SPOTIFY"
+          RES_I=$(cat itunes_res.txt)
+          RES_S=$(cat spotify_res.txt)
           
-          # 3. Controllo risultati per il salvataggio
-          if [[ "$OUT_ITUNES" == *"FOUND"* || "$OUT_SPOTIFY" == *"FOUND"* ]]; then
+          echo "iTunes: $RES_I"
+          echo "Spotify: $RES_S"
+          
+          if [[ "$RES_I" == *"FOUND"* || "$RES_S" == *"FOUND"* ]]; then
             echo "found=true" >> $GITHUB_OUTPUT
-            echo "STATO: Novità rilevate, il file verrà aggiornato."
           else
             echo "found=false" >> $GITHUB_OUTPUT
-            echo "STATO: Nessun cambiamento trovato."
           fi
 
       - name: Save Changes
