@@ -1,7 +1,6 @@
 import requests
-import pandas as pd
+import re
 import os
-import io
 from datetime import datetime
 
 # URL della classifica ufficiale TikTok Billboard
@@ -13,28 +12,33 @@ def recupera_tiktok_billboard():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
     }
     try:
-        response = requests.get(URL, headers=headers, timeout=20)
+        response = requests.get(URL, headers=headers, timeout=30)
         response.encoding = 'utf-8'
-        
-        # Billboard ha una struttura complessa, quindi cerchiamo i dati in modo mirato
-        # Leggiamo le tabelle (Billboard spesso ne usa una per la chart)
-        tabelle = pd.read_html(io.StringIO(response.text))
-        
-        # Cerchiamo la tabella che contiene i dati (solitamente la prima o l'unica con molti dati)
-        df = tabelle[0]
-        
-        # Pulizia: Billboard usa spesso colonne con nomi come 'Song' o 'Artist'
-        # Cerchiamo di estrarre le prime 30-40 righe che sono il cuore del trend
+        html = response.text
+
+        # Usiamo le espressioni regolari per trovare i titoli dei brani
+        # Billboard usa tag h3 con classi specifiche per i titoli
+        # Cerchiamo i pattern più comuni nel loro codice
+        c_titoli = re.findall(r'<h3[^>]*id="title-of-a-story"[^>]*>\s*([^<]+)\s*</h3>', html)
+        # Cerchiamo gli artisti (solitamente sono span sotto i titoli)
+        c_artisti = re.findall(r'<span[^>]*class="[^"]*c-label[^"]*"[^>]*>\s*([^<]+)\s*</span>', html)
+
         brani = []
-        for index, row in df.head(50).iterrows():
-            # Uniamo le celle della riga per trovare il nome del brano e artista
-            info = " - ".join([str(val) for val in row if pd.notna(val) and "RANK" not in str(val).upper()])
-            brani.append(info)
-            
-        return set([b.encode('utf-8', 'ignore').decode('utf-8') for b in brani])
-    except Exception:
-        # Se pandas fallisce (perché Billboard cambia layout), usiamo un metodo di emergenza
-        print("Errore lettura tabella Billboard")
+        # Pulizia dei risultati
+        for t, a in zip([t.strip() for t in c_titoli], [a.strip() for a in c_artisti]):
+            if t and a and len(t) > 1 and "Chart" not in t:
+                entry = f"{a} - {t}"
+                brani.append(entry)
+        
+        # Se non troviamo nulla con il primo metodo, proviamo un fallback più generico
+        if not brani:
+            # Cerca qualsiasi testo dentro h3 che sembri un titolo
+            backup = re.findall(r'c-title__link">([^<]+)</a>', html)
+            brani = [b.strip() for b in backup if len(b) > 2]
+
+        return set(brani)
+    except Exception as e:
+        print(f"Errore tecnico: {e}")
         return None
 
 # Carica lo storico
@@ -47,7 +51,7 @@ else:
 attuali = recupera_tiktok_billboard()
 
 if attuali:
-    nuove_entrate = [b for b in attuali if len(str(b)) > 10 and b not in storico]
+    nuove_entrate = [b for b in attuali if b not in storico and "Songwriter" not in b]
     
     if nuove_entrate:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -57,4 +61,6 @@ if attuali:
         print("FOUND")
     else:
         print("NO_CHANGES")
-        
+else:
+    print("EMPTY_RESULTS")
+    
