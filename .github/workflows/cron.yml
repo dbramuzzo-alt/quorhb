@@ -8,11 +8,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # Aggiornato alla v5 (compatibile con Node 24)
       - name: Checkout
         uses: actions/checkout@v5
 
-      # Aggiornato alla v6 (compatibile con Node 24)
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -38,6 +36,24 @@ jobs:
           else
             echo "found=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Invia Notifica Email
+        if: steps.run_scripts.outputs.found == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "🎵 Novità Rilevata: Aggiornamento Classifiche"
+          to: dbramuzzo@gmail.com
+          from: GitHub Monitor Bot
+          body: |
+            Il monitor ha rilevato nuove modifiche!
+            
+            Risultati:
+            - iTunes: $(cat itunes_res.txt)
+            - Spotify: $(cat spotify_res.txt)
 
       - name: Save Changes
         if: steps.run_scripts.outputs.found == 'true'
